@@ -27,10 +27,21 @@ def get_tononkira():
     soup = BeautifulSoup(response.content, 'html.parser')
     
     try:
-        # Trouver la section contenant les paroles
-        title = soup.find('h2').text.strip()
-        author = soup.find('div', class_='author').text.strip()
-        poem_content = soup.find('div', class_='poem-content').text.strip()
+        # Trouver la section contenant le titre et l'auteur
+        title_author = soup.find('h2', class_='border-bottom')
+        title = title_author.contents[0].strip()  # Titre
+        author = title_author.find('a').text.strip()  # Auteur
+
+        # Récupérer le contenu des paroles après le titre
+        poem_content = ''
+        for elem in title_author.find_all_next():
+            if elem.name == 'div':
+                break  # Arrêter à la première div qui suit le h2
+            poem_content += elem.get_text(separator=' ', strip=True) + '\n'
+
+        # Enlever les nouvelles lignes superflues
+        poem_content = poem_content.strip()
+        
     except AttributeError as e:
         return jsonify({'error': 'Could not find the necessary HTML elements'}), 404
 
