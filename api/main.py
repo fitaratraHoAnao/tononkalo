@@ -1,67 +1,49 @@
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify, request
 import requests
 from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-# Route pour rechercher un poème
-@app.route('/antsa', methods=['GET'])
-def antsy():
-    # Récupérer les paramètres fournis dans l'URL
-    mpanoratra = request.args.get('mpanoratra', '').lower()
-    tononkalo = request.args.get('tononkalo', '').lower()
+@app.route('/tononkira')
+def get_tononkira():
+    # Récupérer les paramètres de l'URL
+    auteur = request.args.get('auteur')
+    titre = request.args.get('titre')
+
+    if not auteur or not titre:
+        return jsonify({'error': 'Please provide both auteur and titre parameters'}), 400
+
+    # URL de la page tononkira en utilisant les paramètres
+    url = f'https://vetso.serasera.org/tononkalo/{auteur}/{titre}'
     
-    # Vérifier que les paramètres sont fournis
-    if not mpanoratra or not tononkalo:
-        return jsonify({"error": "Paramètres manquants"}), 400
+    # Faire une requête GET pour récupérer la page
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an error for bad responses
+    except requests.RequestException as e:
+        return jsonify({'error': str(e)}), 500
 
-    # URL de base du site à scraper
-    base_url = "https://vetso.serasera.org"
-
-    # Construire l'URL de la page de l'auteur
-    author_url = f"{base_url}/tononkalo/{mpanoratra}"
+    # Parser le contenu HTML avec BeautifulSoup
+    soup = BeautifulSoup(response.content, 'html.parser')
     
     try:
-        # Faire la requête vers la page de l'auteur
-        response = requests.get(author_url)
-        if response.status_code != 200:
-            return jsonify({"error": "Auteur introuvable"}), 404
-        
-        # Parse le HTML de la page
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # Trouver la section contenant les paroles
+        title = soup.find('h2').text.strip()
+        author = soup.find('div', class_='author').text.strip()
+        poem_content = soup.find('div', class_='poem-content').text.strip()
+    except AttributeError as e:
+        return jsonify({'error': 'Could not find the necessary HTML elements'}), 404
 
-        # Chercher tous les liens des poèmes sur la page
-        poems_links = soup.find_all('a', href=True, string=True)
+    # Organiser les données sous forme de dictionnaire
+    result = {
+        'title': title,
+        'author': author,
+        'content': poem_content
+    }
 
-        # Rechercher le poème correspondant au titre fourni
-        matched_poem_url = None
-        for link in poems_links:
-            if tononkalo in link.string.lower():
-                matched_poem_url = base_url + link['href']
-                break
+    # Retourner les données en format JSON
+    return jsonify(result)
 
-        # Si aucun poème n'est trouvé
-        if not matched_poem_url:
-            return jsonify({"error": "Poème introuvable"}), 404
-
-        # Faire la requête pour récupérer la page du poème
-        poem_page = requests.get(matched_poem_url)
-        soup_poem = BeautifulSoup(poem_page.content, 'html.parser')
-
-        # Récupérer le titre et le contenu du poème
-        title = soup_poem.find('h1').text.strip()  # Titre du poème
-        poem_content = soup_poem.find('div', class_='entry').text.strip()  # Contenu du poème
-
-        # Retourner le poème en format JSON
-        return jsonify({
-            "title": title,
-            "author": mpanoratra.upper(),
-            "content": poem_content
-        })
-
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": "Erreur de connexion au site"}), 500
-
-# Lancer l'application Flask
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True)
+        
