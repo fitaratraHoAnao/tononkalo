@@ -1,70 +1,67 @@
 from flask import Flask, request, jsonify
 import requests
 from bs4 import BeautifulSoup
-import re
 
 app = Flask(__name__)
 
+# Route principale pour la recherche de poèmes
 @app.route('/antsa', methods=['GET'])
 def antsy():
-    mpanoratra = request.args.get('mpanoratra')
-    tononkalo = request.args.get('tononkalo')
-
-    if not mpanoratra or not tononkalo:
-        return jsonify({"error": "Veuillez fournir à la fois un auteur (mpanoratra) et un titre (tononkalo)"}), 400
-
-    # Base URL pour l'auteur
-    author_url = f"https://vetso.serasera.org/mpanoratra/{mpanoratra.lower()}"
-
-    # Récupérer la page de l'auteur
-    page = requests.get(author_url)
-    if page.status_code != 200:
-        return jsonify({"error": "Auteur non trouvé"}), 404
-
-    soup = BeautifulSoup(page.content, 'html.parser')
-
-    # Chercher tous les liens vers les poèmes de cet auteur
-    poems_links = soup.find_all('a', href=True, text=True)
+    # Récupérer les paramètres fournis dans l'URL
+    mpanoratra = request.args.get('mpanoratra', '').lower()
+    tononkalo = request.args.get('tononkalo', '').lower()
     
-    # Normaliser la recherche du titre (enlever espaces, accents, etc.)
-    normalized_tononkalo = re.sub(r'\W+', '', tononkalo.lower())
+    # Vérifier que les paramètres sont fournis
+    if not mpanoratra or not tononkalo:
+        return jsonify({"error": "Paramètres manquants"}), 400
 
-    matched_poem_url = None
-    for link in poems_links:
-        poem_title = link.get_text(strip=True)
-        normalized_title = re.sub(r'\W+', '', poem_title.lower())
-        
-        # Si une correspondance partielle est trouvée
-        if normalized_tononkalo in normalized_title:
-            matched_poem_url = f"https://vetso.serasera.org{link['href']}"
-            break
+    # URL de base du site à scraper
+    base_url = "https://vetso.serasera.org"
 
-    if not matched_poem_url:
-        return jsonify({"error": "Poème non trouvé"}), 404
-
-    # Requête vers la page du poème correspondant
-    poem_page = requests.get(matched_poem_url)
-    soup_poem = BeautifulSoup(poem_page.content, 'html.parser')
-
+    # Construire l'URL de la page de l'auteur
+    author_url = f"{base_url}/tononkalo/{mpanoratra}"
+    
     try:
-        # Extraire le titre et le contenu du poème
-        title = soup_poem.find('h2').get_text(strip=True)
-        poem_lines = soup_poem.find('div', class_='col-md-8').get_text(strip=True).splitlines()
-        poem = "\n".join(line for line in poem_lines if line)
+        # Faire la requête vers la page de l'auteur
+        response = requests.get(author_url)
+        if response.status_code != 200:
+            return jsonify({"error": "Auteur introuvable"}), 404
+        
+        # Parse le HTML de la page
+        soup = BeautifulSoup(response.content, 'html.parser')
 
-        # Organiser le contenu en format JSON
-        result = {
-            "titre": title,
-            "auteur": mpanoratra.upper(),
-            "poeme": poem
-        }
+        # Chercher tous les liens des poèmes sur la page
+        poems_links = soup.find_all('a', href=True, string=True)
 
-        return jsonify(result)
+        # Rechercher le poème correspondant au titre fourni
+        matched_poem_url = None
+        for link in poems_links:
+            if tononkalo in link.string.lower():
+                matched_poem_url = base_url + link['href']
+                break
 
-    except AttributeError:
-        return jsonify({"error": "Erreur lors de l'extraction du poème"}), 500
+        # Si aucun poème n'est trouvé
+        if not matched_poem_url:
+            return jsonify({"error": "Poème introuvable"}), 404
 
+        # Faire la requête pour récupérer la page du poème
+        poem_page = requests.get(matched_poem_url)
+        soup_poem = BeautifulSoup(poem_page.content, 'html.parser')
 
+        # Récupérer le titre et le contenu du poème
+        title = soup_poem.find('h1').text.strip()
+        poem_content = soup_poem.find('div', class_='entry').text.strip()
+
+        # Retourner le poème en format JSON
+        return jsonify({
+            "title": title,
+            "author": mpanoratra.upper(),
+            "content": poem_content
+        })
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": "Erreur de connexion au site"}), 500
+
+# Lancer l'application Flask
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-  
