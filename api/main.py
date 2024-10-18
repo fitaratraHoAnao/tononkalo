@@ -32,11 +32,14 @@ def get_tononkira():
         title = title_author.contents[0].strip()  # Titre
         author = title_author.find('a').text.strip()  # Auteur
 
-        # Récupérer le contenu des paroles après le titre
+        # Récupérer le contenu des paroles
         poem_content = ''
         for elem in title_author.find_all_next():
-            if elem.name == 'div':
-                break  # Arrêter à la première div qui suit le h2
+            # S'arrêter à la première div qui suit le h2 ou à d'autres éléments significatifs
+            if elem.name == 'div' and 'no-print' in elem.get('class', []):
+                break  # Arrêter si on atteint un div qui n'est pas dans les paroles
+            
+            # Ajouter le texte à poem_content
             poem_content += elem.get_text(separator=' ', strip=True) + '\n'
 
         # Enlever les nouvelles lignes superflues
