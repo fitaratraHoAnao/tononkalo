@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-# Route principale pour la recherche de poèmes
+# Route pour rechercher un poème
 @app.route('/antsa', methods=['GET'])
 def antsy():
     # Récupérer les paramètres fournis dans l'URL
@@ -49,8 +49,8 @@ def antsy():
         soup_poem = BeautifulSoup(poem_page.content, 'html.parser')
 
         # Récupérer le titre et le contenu du poème
-        title = soup_poem.find('h1').text.strip()
-        poem_content = soup_poem.find('div', class_='entry').text.strip()
+        title = soup_poem.find('h1').text.strip()  # Titre du poème
+        poem_content = soup_poem.find('div', class_='entry').text.strip()  # Contenu du poème
 
         # Retourner le poème en format JSON
         return jsonify({
